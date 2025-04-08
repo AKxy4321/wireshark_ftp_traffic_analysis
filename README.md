@@ -1,7 +1,8 @@
-```markdown
-# 📡 FTP Traffic Capture with Wireshark
 
-This project demonstrates how to generate and capture insecure FTP traffic using a local FTP server and a Python script. The captured packets can be analyzed using Wireshark to observe sensitive data like usernames, passwords, and file contents transmitted in plaintext.
+```markdown
+# 📡 FTP & FTPS Traffic Capture with Wireshark
+
+This project demonstrates how to generate and capture **both insecure FTP and secure FTPS** traffic using a local server and Python scripts. It is intended for educational use — particularly for analyzing how sensitive data travels over the network using tools like **Wireshark**.
 
 ---
 
@@ -10,30 +11,45 @@ This project demonstrates how to generate and capture insecure FTP traffic using
 - Arch Linux (or any Linux distro)
 - Python 3
 - `vsftpd` (Very Secure FTP Daemon)
+- `openssl` (for generating SSL certificates)
 - Wireshark
 
 ---
 
-## 🐧 Setting Up a Local FTP Server on Arch Linux
+## 🐧 Setting Up Local FTP/FTPS Servers
 
 ### 1. Install `vsftpd`:
 ```bash
 sudo pacman -S vsftpd
 ```
 
-### 2. Run Demo Setup Script:
-Use the `setup_ftp.py` script to automatically configure a temporary anonymous FTP server for demo purposes.
+---
 
+### 2. Set Up Insecure FTP Server:
 ```bash
-sudo python setup_ftp.py
+sudo python3 setup_ftp.py
 ```
 
-⚠️ This script will:
-- Overwrite `/etc/vsftpd.conf` with demo settings
+📌 This will:
+- Overwrite `/etc/vsftpd.conf` with a demo config
 - Enable anonymous login with write access
-- Create a read-only FTP root and a writable `uploads/` directory
-- Start the `vsftpd` service
-- Wait for you to type `STOP` to shut it down and delete the config
+- Create `ftp/` with a read-only root and writable `uploads/` directory
+- Start `vsftpd`
+- Wait for you to type `STOP` to shut down and clean up
+
+---
+
+### 3. Set Up Secure FTPS Server:
+```bash
+sudo python3 setup_ftps.py
+```
+
+📌 This will:
+- Generate a self-signed SSL certificate at `/etc/ssl/private/vsftpd.pem`
+- Configure FTPS (TLS over FTP) via `/etc/vsftpd.conf`
+- Enable anonymous login with SSL encryption
+- Start `vsftpd`
+- Wait for you to type `STOP` to shut down and clean up
 
 ---
 
@@ -46,80 +62,110 @@ echo "This is confidential data for Wireshark demo." > secret.txt
 
 ---
 
-## 🐍 Python Script: FTP File Upload & Download
-
-Create a script called `demo_ftp.py` with the following content:
+## 🐍 FTP Client Script: `demo_ftp.py`
 
 ```python
 from ftplib import FTP
 
-ftp_host = "127.0.0.1"  # Use your IP if testing over LAN
-ftp_user = "anonymous"
-ftp_pass = "12345"
+ftp = FTP("127.0.0.1")
+ftp.login("anonymous", "12345")
 
-ftp = FTP(ftp_host)
-ftp.login(user=ftp_user, passwd=ftp_pass)
+with open("secret.txt", "rb") as f:
+    ftp.storbinary("STOR uploads/secret.txt", f)
 
-with open("secret.txt", "rb") as file:
-    ftp.storbinary("STOR uploads/secret.txt", file)
-
-with open("downloaded.txt", "wb") as file:
-    ftp.retrbinary("RETR uploads/secret.txt", file.write)
+with open("downloaded.txt", "wb") as f:
+    ftp.retrbinary("RETR uploads/secret.txt", f.write)
 
 ftp.quit()
 ```
 
-📝 This uses **anonymous login** with a dummy password and interacts with the `uploads/` subdirectory inside the FTP root.
-
-Run the script:
+Run:
 ```bash
-python demo_ftp.py
+python3 demo_ftp.py
+```
+
+---
+
+## 🐍 FTPS Client Script: `demo_ftps.py`
+
+```python
+from ftplib import FTP_TLS
+
+ftp = FTP_TLS("127.0.0.1")
+ftp.login("anonymous", "12345")
+ftp.prot_p()  # Enable encrypted data transfer
+
+with open("secret.txt", "rb") as f:
+    ftp.storbinary("STOR uploads/secret.txt", f)
+
+with open("downloaded.txt", "wb") as f:
+    ftp.retrbinary("RETR uploads/secret.txt", f.write)
+
+ftp.quit()
+```
+
+Run:
+```bash
+python3 demo_ftps.py
 ```
 
 ---
 
 ## 📡 Capture Traffic with Wireshark
 
-1. Open Wireshark. (sudo wireshark)
-2. Start capture on your active network interface. (lo or loopback in this case)
-3. Apply filter:
-   ```
-   ftp || ftp-data
-   ```
-4. Run the Python script while capture is ongoing.
-5. Look for:
-   - `USER anonymous` and password
-   - FTP commands like `STOR uploads/secret.txt` and `RETR`
-   - File contents in `ftp-data` packets
+1. Open Wireshark (`sudo wireshark`)
+2. Start capture on your network interface (`lo` for localhost)
+3. Apply one of the following capture filters:
+
+   - For **FTP (insecure)**:
+     ```
+     ftp || ftp-data
+     ```
+     Observe plaintext credentials and file content.
+
+   - For **FTPS (secure)**:
+     ```
+     tls
+     ```
+     Observe encrypted traffic — FTP commands and data are not visible.
+4. Run the FTP or FTPS demo script while capturing
+5. Observe:
+   - `USER anonymous` and password (for FTP)
+   - `STOR` / `RETR` commands
+   - File contents in plaintext (only for FTP)
+   - Encrypted payloads (for FTPS)
 
 ---
 
-## 🔐 Observed Security Risk
+## 🔐 Observed Security Risk (FTP)
 
-- **FTP transmits data in plaintext**, including login and file contents.
-- Anyone on the same network can intercept and read this data using packet sniffers like Wireshark.
-
----
-
-## 🛡 Mitigation Recommendations
-
-- Use **SFTP** (Secure FTP over SSH) instead of plain FTP.
-- Implement **VPN** for secure tunneling.
-- Disable FTP if not needed, or restrict access with a firewall.
+- FTP sends usernames, passwords, and files in **plaintext**
+- Anyone monitoring the network can intercept and read the data
+- FTPS encrypts all communication, making eavesdropping ineffective
 
 ---
 
-## 📸 Reporting
+## 🛡 Recommendations
+
+- Avoid FTP in production
+- Prefer **SFTP** (over SSH) or **FTPS**
+- Use **firewalls** and **VPNs** to isolate FTP/FTPS access
+- Regularly audit exposed services and ports
+
+---
+
+## 📸 Reporting Tips
 
 For academic reports or security analysis:
-- Take **screenshots of captured packets** showing sensitive data.
-- Include **recommendations for mitigation**.
-- Mention the use of your own local FTP server for testing.
+- Take **screenshots of packet captures**
+- Highlight plaintext credentials or file data in FTP
+- Compare with encrypted payloads in FTPS
+- Include **mitigation strategies**
 
 ---
 
 ## ✅ Done!
 
-You've now created a complete, local FTP demo environment for capturing and analyzing insecure traffic using Wireshark.
+You've successfully built a working lab to demonstrate both insecure and secure FTP traffic. Use it to understand network protocol behavior and security implications in real time using Wireshark.
 
 ---
