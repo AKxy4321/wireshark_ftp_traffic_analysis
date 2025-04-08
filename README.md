@@ -1,7 +1,3 @@
-Here’s your updated `README.md` with changes reflecting the automation done via `setup_ftp.py`, as well as the revised Python script (`demo_ftp.py`) which now uploads to and downloads from the `uploads/` directory inside the FTP root:
-
----
-
 ```markdown
 # 📡 FTP Traffic Capture with Wireshark
 
