@@ -86,10 +86,10 @@ def create_and_apply_config():
     print("[*] Restarting vsftpd service...")
     subprocess.run(["systemctl", "restart", "vsftpd"], check=True)
 
-    print("[*] Checking vsftpd status...")
-    subprocess.run(["systemctl", "status", "vsftpd"])
-    print("[*] Checking if port 21 is open...")
-    subprocess.run(["ss", "-tuln"])
+    # print("[*] Checking vsftpd status...")
+    # subprocess.run(["systemctl", "status", "vsftpd"])
+    # print("[*] Checking if port 21 is open...")
+    # subprocess.run(["ss", "-tuln"])
     print("[+] FTPS server started.")
 
 
